@@ -6,33 +6,50 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*" }
 });
 
+let waitingUser = null;
+
 io.on("connection", socket => {
-  console.log("User connected:", socket.id);
+  console.log("Connected:", socket.id);
 
-  socket.on("offer", data => {
-    socket.broadcast.emit("offer", data);
+  if (waitingUser) {
+    // Pair users
+    socket.partner = waitingUser;
+    waitingUser.partner = socket;
+
+    waitingUser.emit("ready", { caller: true });
+    socket.emit("ready", { caller: false });
+
+    waitingUser = null;
+  } else {
+    waitingUser = socket;
+  }
+
+  socket.on("offer", offer => {
+    socket.partner?.emit("offer", offer);
   });
 
-  socket.on("answer", data => {
-    socket.broadcast.emit("answer", data);
+  socket.on("answer", answer => {
+    socket.partner?.emit("answer", answer);
   });
 
-  socket.on("ice", data => {
-    socket.broadcast.emit("ice", data);
+  socket.on("ice", candidate => {
+    socket.partner?.emit("ice", candidate);
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
-    socket.broadcast.emit("peer-left");
+    if (socket.partner) {
+      socket.partner.emit("peer-left");
+      socket.partner.partner = null;
+    }
+    if (waitingUser === socket) {
+      waitingUser = null;
+    }
   });
 });
 
 server.listen(3000, () => {
-  console.log("Signaling server running on port 3000");
+  console.log("Server running on 3000");
 });
