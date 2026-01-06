@@ -4,7 +4,6 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-
 const io = new Server(server, {
   cors: { origin: "*" }
 });
@@ -14,18 +13,19 @@ let waitingUser = null;
 io.on("connection", socket => {
   console.log("Connected:", socket.id);
 
-  if (waitingUser) {
-    // Pair users
-    socket.partner = waitingUser;
-    waitingUser.partner = socket;
+  socket.on("ready", () => {
+    if (waitingUser) {
+      socket.partner = waitingUser;
+      waitingUser.partner = socket;
 
-    waitingUser.emit("ready", { caller: true });
-    socket.emit("ready", { caller: false });
+      waitingUser.emit("start-call", { caller: true });
+      socket.emit("start-call", { caller: false });
 
-    waitingUser = null;
-  } else {
-    waitingUser = socket;
-  }
+      waitingUser = null;
+    } else {
+      waitingUser = socket;
+    }
+  });
 
   socket.on("offer", offer => {
     socket.partner?.emit("offer", offer);
@@ -44,12 +44,10 @@ io.on("connection", socket => {
       socket.partner.emit("peer-left");
       socket.partner.partner = null;
     }
-    if (waitingUser === socket) {
-      waitingUser = null;
-    }
+    if (waitingUser === socket) waitingUser = null;
   });
 });
 
 server.listen(3000, () => {
-  console.log("Server running on 3000");
+  console.log("Server running");
 });
